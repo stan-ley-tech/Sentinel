@@ -374,6 +374,62 @@ test("circuit breaker opens after repeated upstream failures and short-circuits 
   }
 });
 
+test("resilience options are honored: a low failure threshold and short reset timeout trip and recover fast", async () => {
+  // /healthz always answers 200 regardless of upstreamUp, so the real
+  // (non-overridden) health checker always sees this upstream as healthy —
+  // isolating the test to the circuit breaker's own threshold/reset-timeout
+  // wiring, not health-check timing.
+  let upstreamUp = false;
+  const upstream = http.createServer((req, res) => {
+    if (req.url === "/healthz") {
+      res.writeHead(200);
+      res.end();
+      return;
+    }
+    if (upstreamUp) {
+      res.end("ok");
+    } else {
+      res.writeHead(500);
+      res.end();
+    }
+  });
+  const upstreamPort = await listen(upstream);
+
+  const config: GatewayConfig = {
+    ...emptyConfig(),
+    routes: [
+      {
+        id: "r1", pathPrefix: "/v1/orders", upstreams: [`http://127.0.0.1:${upstreamPort}`],
+        stripPrefix: false, authRequired: false, requiredPermission: null, requireSignature: false,
+      },
+    ],
+  };
+  const gateway = createServer(() => config, undefined, undefined, {
+    failureThreshold: 2,
+    resetTimeoutMs: 200,
+  });
+  const port = await listen(gateway);
+
+  try {
+    const first = await fetch(`http://127.0.0.1:${port}/v1/orders`);
+    const second = await fetch(`http://127.0.0.1:${port}/v1/orders`);
+    assert.equal(first.status, 500);
+    assert.equal(second.status, 500);
+
+    const third = await fetch(`http://127.0.0.1:${port}/v1/orders`);
+    assert.equal(third.status, 503, "expected the breaker to open after 2 failures (threshold=2)");
+
+    upstreamUp = true;
+    await new Promise((resolve) => setTimeout(resolve, 250)); // past the 200ms reset timeout
+
+    const recovered = await fetch(`http://127.0.0.1:${port}/v1/orders`);
+    assert.equal(recovered.status, 200, "expected the breaker to allow a probe and recover once reopened past its short timeout");
+  } finally {
+    gateway.close();
+    upstream.close();
+  }
+});
+
 test("/metrics exposes Prometheus text reflecting recorded traffic", async () => {
   const upstream = http.createServer((_req, res) => res.end("ok"));
   const upstreamPort = await listen(upstream);

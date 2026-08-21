@@ -8,15 +8,29 @@ const PORT = Number(process.env.PORT ?? 8080);
 const CONTROL_PLANE_URL = process.env.SENTINEL_CONTROL_PLANE_URL ?? "http://127.0.0.1:8000";
 const INTERNAL_TOKEN = process.env.SENTINEL_INTERNAL_TOKEN ?? "dev-internal-token";
 const CONFIG_POLL_MS = Number(process.env.SENTINEL_CONFIG_POLL_MS ?? 5000);
+const BREAKER_FAILURE_THRESHOLD = envInt("SENTINEL_BREAKER_FAILURE_THRESHOLD");
+const BREAKER_RESET_MS = envInt("SENTINEL_BREAKER_RESET_MS");
+const HEALTH_CHECK_INTERVAL_MS = envInt("SENTINEL_HEALTH_CHECK_INTERVAL_MS");
+
+function envInt(name: string): number | undefined {
+  const raw = process.env[name];
+  return raw === undefined ? undefined : Number(raw);
+}
 
 async function main(): Promise<void> {
   const configClient = new ConfigClient(CONTROL_PLANE_URL, INTERNAL_TOKEN, CONFIG_POLL_MS);
   await configClient.start();
 
-  const server = createServer(() => configClient.config, undefined, {
-    controlPlaneUrl: CONTROL_PLANE_URL,
-    internalToken: INTERNAL_TOKEN,
-  });
+  const server = createServer(
+    () => configClient.config,
+    undefined,
+    { controlPlaneUrl: CONTROL_PLANE_URL, internalToken: INTERNAL_TOKEN },
+    {
+      failureThreshold: BREAKER_FAILURE_THRESHOLD,
+      resetTimeoutMs: BREAKER_RESET_MS,
+      healthCheckIntervalMs: HEALTH_CHECK_INTERVAL_MS,
+    },
+  );
   server.listen(PORT, () => {
     console.log(
       `sentinel gateway: listening on :${PORT}, control plane at ${CONTROL_PLANE_URL} (poll every ${CONFIG_POLL_MS}ms)`,

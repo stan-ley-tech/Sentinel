@@ -25,6 +25,18 @@ export interface ObservabilityOptions {
   internalToken: string;
 }
 
+export interface ResilienceOptions {
+  /** Consecutive failures before the circuit breaker opens. Default 5. */
+  failureThreshold?: number;
+  /** How long the breaker stays open before allowing a half-open probe.
+   * Default 30s in production; operators (and this project's own
+   * integration test / benchmark) may want it much shorter to observe
+   * recovery quickly. */
+  resetTimeoutMs?: number;
+  /** Health check poll interval. Default 5s. */
+  healthCheckIntervalMs?: number;
+}
+
 function sendJson(res: http.ServerResponse, statusCode: number, body: unknown): void {
   res.writeHead(statusCode, { "content-type": "application/json" });
   res.end(JSON.stringify(body));
@@ -34,9 +46,13 @@ export function createServer(
   getConfig: () => GatewayConfig,
   isHealthyOverride?: (upstream: string) => boolean,
   observability?: ObservabilityOptions,
+  resilience?: ResilienceOptions,
 ): http.Server {
-  const circuitBreaker = new CircuitBreaker();
-  const healthChecker = new HealthChecker(() => collectUpstreams(getConfig().routes));
+  const circuitBreaker = new CircuitBreaker(resilience?.failureThreshold, resilience?.resetTimeoutMs);
+  const healthChecker = new HealthChecker(
+    () => collectUpstreams(getConfig().routes),
+    resilience?.healthCheckIntervalMs,
+  );
   const deps = createPipelineDeps();
   const metrics = new MetricsRegistry();
   const auditLogger = new AuditLogger(observability?.controlPlaneUrl ?? null, observability?.internalToken ?? "");
