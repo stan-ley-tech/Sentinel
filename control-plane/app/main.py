@@ -8,7 +8,11 @@ the gateway over HTTP.
 
 from fastapi import FastAPI
 
+from app.routers import admin
+
 app = FastAPI(title="Sentinel Control Plane")
+
+app.include_router(admin.router)
 
 
 @app.get("/healthz")
