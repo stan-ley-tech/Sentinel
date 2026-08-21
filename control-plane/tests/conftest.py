@@ -6,13 +6,19 @@ from typing import Iterator
 import pytest
 from fastapi.testclient import TestClient
 
-from app.auth import ADMIN_TOKEN
+from app.auth import ADMIN_TOKEN, INTERNAL_TOKEN
 from app.db import create_connection, get_db
 from app.main import app
+
 
 @pytest.fixture()
 def admin_headers() -> dict[str, str]:
     return {"Authorization": f"Bearer {ADMIN_TOKEN}"}
+
+
+@pytest.fixture()
+def internal_headers() -> dict[str, str]:
+    return {"Authorization": f"Bearer {INTERNAL_TOKEN}"}
 
 
 @pytest.fixture()

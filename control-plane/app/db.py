@@ -12,6 +12,8 @@ import os
 import sqlite3
 from typing import Iterator
 
+from app.auth import new_secret
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS roles (
     name TEXT PRIMARY KEY,
@@ -49,6 +51,11 @@ CREATE TABLE IF NOT EXISTS ip_rules (
     priority INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
 """
 
 
@@ -80,3 +87,19 @@ class Database:
 
 def get_db() -> Iterator[sqlite3.Connection]:
     yield Database.connection()
+
+
+def get_jwt_secret(db: sqlite3.Connection) -> str:
+    """Return the shared HS256 secret used to sign/verify OAuth-issued
+    JWTs, generating and persisting one on first use. The gateway learns
+    this value from the /internal/config snapshot, not from a shared
+    config file, so a single source of truth survives control-plane
+    restarts without any manual coordination."""
+    row = db.execute("SELECT value FROM settings WHERE key = 'jwt_secret'").fetchone()
+    if row is not None:
+        return row["value"]
+
+    secret = new_secret()
+    db.execute("INSERT INTO settings (key, value) VALUES ('jwt_secret', ?)", (secret,))
+    db.commit()
+    return secret
