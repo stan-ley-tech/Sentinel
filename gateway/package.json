@@ -1,0 +1,17 @@
+{
+  "name": "sentinel-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Sentinel's data-plane reverse proxy: auth, authorization, rate limiting, and security policy enforcement, in front of backend services.",
+  "scripts": {
+    "build": "tsc -p .",
+    "start": "node dist/src/index.js",
+    "dev": "tsc -p . --watch",
+    "test": "tsc -p . && node --test dist"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "typescript": "^5.9.3"
+  }
+}
