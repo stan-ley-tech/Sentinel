@@ -56,9 +56,17 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
 
+class Server(ThreadingHTTPServer):
+    # The socketserver default (5) is too small to be a fair upstream for
+    # benchmarking a gateway under real concurrency — it would measure this
+    # toy server's queue depth, not Sentinel's overhead.
+    request_queue_size = 256
+    allow_reuse_address = True
+
+
 def main() -> None:
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 9001
-    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    server = Server(("127.0.0.1", port), Handler)
     print(f"orders_service: listening on :{port}")
     server.serve_forever()
 

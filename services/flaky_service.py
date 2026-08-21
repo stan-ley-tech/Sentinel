@@ -60,9 +60,14 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
 
+class Server(ThreadingHTTPServer):
+    request_queue_size = 256
+    allow_reuse_address = True
+
+
 def main() -> None:
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 9002
-    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    server = Server(("127.0.0.1", port), Handler)
     print(f"flaky_service: listening on :{port} (mode={state['mode']})")
     server.serve_forever()
 
