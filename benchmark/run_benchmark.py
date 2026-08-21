@@ -56,9 +56,16 @@ INTERNAL_TOKEN = "dev-internal-token"
 CONCURRENCY = 20
 
 
-def venv_python() -> Path:
+def venv_python() -> str:
+    """Prefer control-plane's own venv (matches local dev setup); fall
+    back to whichever interpreter is running this script."""
     windows = CONTROL_PLANE_DIR / ".venv" / "Scripts" / "python.exe"
-    return windows if windows.exists() else CONTROL_PLANE_DIR / ".venv" / "bin" / "python"
+    if windows.exists():
+        return str(windows)
+    posix = CONTROL_PLANE_DIR / ".venv" / "bin" / "python"
+    if posix.exists():
+        return str(posix)
+    return sys.executable
 
 
 def wait_for(url: str, timeout: float = 15.0) -> None:

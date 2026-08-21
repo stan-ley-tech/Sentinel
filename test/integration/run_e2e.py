@@ -66,11 +66,17 @@ def check(name: str, condition: bool, detail: str = "") -> None:
     print(f"  [{marker}] {name}" + (f" -- {detail}" if detail and not condition else ""))
 
 
-def venv_python() -> Path:
+def venv_python() -> str:
+    """Prefer control-plane's own venv (matches local dev setup); fall
+    back to whichever interpreter is running this script (CI installs
+    dependencies directly, no venv)."""
     windows = CONTROL_PLANE_DIR / ".venv" / "Scripts" / "python.exe"
     if windows.exists():
-        return windows
-    return CONTROL_PLANE_DIR / ".venv" / "bin" / "python"
+        return str(windows)
+    posix = CONTROL_PLANE_DIR / ".venv" / "bin" / "python"
+    if posix.exists():
+        return str(posix)
+    return sys.executable
 
 
 def wait_for(url: str, timeout: float = 15.0) -> None:
