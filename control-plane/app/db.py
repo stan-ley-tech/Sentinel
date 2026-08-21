@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS routes (
     strip_prefix INTEGER NOT NULL DEFAULT 0,
     auth_required INTEGER NOT NULL DEFAULT 1,
     required_permission TEXT,
+    require_signature INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL
 );
 

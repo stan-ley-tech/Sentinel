@@ -161,6 +161,7 @@ def _route_row_to_out(row: sqlite3.Row) -> models.RouteOut:
         strip_prefix=bool(row["strip_prefix"]),
         auth_required=bool(row["auth_required"]),
         required_permission=row["required_permission"],
+        require_signature=bool(row["require_signature"]),
         created_at=row["created_at"],
     )
 
@@ -173,6 +174,8 @@ def _validate_route(body: models.RouteIn) -> None:
     for upstream in body.upstreams:
         if not (upstream.startswith("http://") or upstream.startswith("https://")):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, f"invalid upstream URL: {upstream}")
+    if body.require_signature and not body.auth_required:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "require_signature routes must also require auth")
 
 
 @router.post("/routes", response_model=models.RouteOut, status_code=status.HTTP_201_CREATED)
@@ -182,10 +185,11 @@ def create_route(body: models.RouteIn, db: sqlite3.Connection = Depends(get_db))
     created_at = _now()
     db.execute(
         """INSERT INTO routes
-           (id, path_prefix, upstreams, strip_prefix, auth_required, required_permission, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+           (id, path_prefix, upstreams, strip_prefix, auth_required, required_permission,
+            require_signature, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
         (route_id, body.path_prefix, json.dumps(body.upstreams), body.strip_prefix,
-         body.auth_required, body.required_permission, created_at),
+         body.auth_required, body.required_permission, body.require_signature, created_at),
     )
     db.commit()
     return models.RouteOut(id=route_id, created_at=created_at, **body.model_dump())
@@ -213,9 +217,9 @@ def update_route(route_id: str, body: models.RouteIn, db: sqlite3.Connection = D
         raise HTTPException(status.HTTP_404_NOT_FOUND, "route not found")
     db.execute(
         """UPDATE routes SET path_prefix = ?, upstreams = ?, strip_prefix = ?,
-           auth_required = ?, required_permission = ? WHERE id = ?""",
+           auth_required = ?, required_permission = ?, require_signature = ? WHERE id = ?""",
         (body.path_prefix, json.dumps(body.upstreams), body.strip_prefix,
-         body.auth_required, body.required_permission, route_id),
+         body.auth_required, body.required_permission, body.require_signature, route_id),
     )
     db.commit()
     return models.RouteOut(id=route_id, created_at=existing["created_at"], **body.model_dump())

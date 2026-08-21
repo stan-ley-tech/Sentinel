@@ -12,6 +12,7 @@ function makeRoute(overrides: Partial<RouteConfig> = {}): RouteConfig {
     stripPrefix: false,
     authRequired: true,
     requiredPermission: null,
+    requireSignature: false,
     ...overrides,
   };
 }

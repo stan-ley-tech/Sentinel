@@ -36,6 +36,19 @@ def test_create_route_rejects_invalid_upstream_url(client: TestClient, admin_hea
     assert resp.status_code == 400
 
 
+def test_create_route_rejects_signature_without_auth(client: TestClient, admin_headers: dict[str, str]) -> None:
+    bad = {**VALID_ROUTE, "auth_required": False, "require_signature": True}
+    resp = client.post("/admin/routes", json=bad, headers=admin_headers)
+    assert resp.status_code == 400
+
+
+def test_create_route_with_signature_required(client: TestClient, admin_headers: dict[str, str]) -> None:
+    signed = {**VALID_ROUTE, "require_signature": True}
+    resp = client.post("/admin/routes", json=signed, headers=admin_headers)
+    assert resp.status_code == 201
+    assert resp.json()["require_signature"] is True
+
+
 def test_list_and_get_route(client: TestClient, admin_headers: dict[str, str]) -> None:
     created = client.post("/admin/routes", json=VALID_ROUTE, headers=admin_headers).json()
 

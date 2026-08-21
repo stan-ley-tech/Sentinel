@@ -26,6 +26,7 @@ export interface RouteConfig {
   stripPrefix: boolean;
   authRequired: boolean;
   requiredPermission: string | null;
+  requireSignature: boolean;
 }
 
 export interface IpRuleConfig {

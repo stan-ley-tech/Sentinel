@@ -48,6 +48,7 @@ def get_config(db: sqlite3.Connection = Depends(get_db)) -> dict[str, object]:
             "strip_prefix": bool(row["strip_prefix"]),
             "auth_required": bool(row["auth_required"]),
             "required_permission": row["required_permission"],
+            "require_signature": bool(row["require_signature"]),
         }
         for row in db.execute("SELECT * FROM routes").fetchall()
     ]

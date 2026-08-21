@@ -29,6 +29,7 @@ function validRawConfig(): Record<string, unknown> {
         strip_prefix: false,
         auth_required: true,
         required_permission: null,
+        require_signature: false,
       },
     ],
     ip_rules: [{ cidr: "10.0.0.0/8", action: "deny", priority: 1 }],

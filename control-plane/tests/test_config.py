@@ -38,6 +38,7 @@ def test_config_snapshot_reflects_admin_state(
 
     assert len(body["routes"]) == 1
     assert body["routes"][0]["path_prefix"] == "/v1/orders"
+    assert body["routes"][0]["require_signature"] is False
 
     assert len(body["ip_rules"]) == 1
     assert body["ip_rules"][0]["cidr"] == "10.0.0.0/8"

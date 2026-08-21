@@ -70,6 +70,7 @@ function parseRoute(raw: unknown): RouteConfig {
     stripPrefix: asBoolean(r.strip_prefix, "routes[].strip_prefix"),
     authRequired: asBoolean(r.auth_required, "routes[].auth_required"),
     requiredPermission: asStringOrNull(r.required_permission, "routes[].required_permission"),
+    requireSignature: asBoolean(r.require_signature, "routes[].require_signature"),
   };
 }
 

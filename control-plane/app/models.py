@@ -55,6 +55,7 @@ class RouteIn(BaseModel):
     strip_prefix: bool = False
     auth_required: bool = True
     required_permission: str | None = None
+    require_signature: bool = False
 
 
 class RouteOut(RouteIn):
