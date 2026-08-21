@@ -68,5 +68,5 @@ export function checkRateLimit(ctx: PipelineContext, limiter: RateLimiter): Reje
     key?.rateLimitPerSecond ?? null,
     key?.rateLimitBurst ?? null,
   );
-  return allowed ? null : { statusCode: 429, error: "rate limit exceeded" };
+  return allowed ? null : { statusCode: 429, error: "rate limit exceeded", stage: "rate_limit" };
 }

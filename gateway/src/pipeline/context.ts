@@ -28,4 +28,7 @@ export interface PipelineContext {
 export interface Rejection {
   statusCode: number;
   error: string;
+  /** Which pipeline stage produced this rejection — feeds metrics
+   * (rejections-by-stage) and the audit log. */
+  stage: string;
 }

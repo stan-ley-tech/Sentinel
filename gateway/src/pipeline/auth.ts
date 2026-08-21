@@ -20,7 +20,7 @@ export function authenticate(ctx: PipelineContext): Rejection | null {
     const hash = sha256Hex(apiKeyHeader);
     const key = ctx.config.apiKeys.find((k) => k.keyHash === hash);
     if (key === undefined || !key.enabled) {
-      return { statusCode: 401, error: "invalid API key" };
+      return { statusCode: 401, error: "invalid API key", stage: "auth" };
     }
     ctx.principal = { apiKeyId: key.id, role: key.role, authMethod: "api-key" };
     return null;
@@ -34,21 +34,21 @@ export function authenticate(ctx: PipelineContext): Rejection | null {
       payload = verifyJwt(token, ctx.config.jwtSecret);
     } catch (err) {
       if (err instanceof InvalidTokenError) {
-        return { statusCode: 401, error: `invalid token: ${err.message}` };
+        return { statusCode: 401, error: `invalid token: ${err.message}`, stage: "auth" };
       }
       throw err;
     }
 
     if (typeof payload.sub !== "string") {
-      return { statusCode: 401, error: "invalid token: missing subject" };
+      return { statusCode: 401, error: "invalid token: missing subject", stage: "auth" };
     }
     const key = ctx.config.apiKeys.find((k) => k.id === payload.sub);
     if (key === undefined || !key.enabled) {
-      return { statusCode: 401, error: "invalid token: unknown or disabled subject" };
+      return { statusCode: 401, error: "invalid token: unknown or disabled subject", stage: "auth" };
     }
     ctx.principal = { apiKeyId: key.id, role: key.role, authMethod: "jwt" };
     return null;
   }
 
-  return { statusCode: 401, error: "missing credentials (X-Api-Key or Authorization: Bearer)" };
+  return { statusCode: 401, error: "missing credentials (X-Api-Key or Authorization: Bearer)", stage: "auth" };
 }

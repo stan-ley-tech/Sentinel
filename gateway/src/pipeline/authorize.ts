@@ -7,7 +7,7 @@ export function authorize(ctx: PipelineContext): Rejection | null {
   if (ctx.route.requiredPermission === null) return null;
 
   if (ctx.principal === null) {
-    return { statusCode: 401, error: "authentication required for this route" };
+    return { statusCode: 401, error: "authentication required for this route", stage: "authorize" };
   }
 
   const permissions = ctx.config.roles[ctx.principal.role]?.permissions ?? [];
@@ -17,5 +17,6 @@ export function authorize(ctx: PipelineContext): Rejection | null {
   return {
     statusCode: 403,
     error: `role '${ctx.principal.role}' lacks permission '${ctx.route.requiredPermission}'`,
+    stage: "authorize",
   };
 }

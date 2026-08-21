@@ -6,7 +6,8 @@ import hashlib
 import os
 import secrets
 
-from fastapi import Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
 ADMIN_TOKEN = os.environ.get("SENTINEL_ADMIN_TOKEN", "dev-admin-token")
 
@@ -34,6 +35,21 @@ def require_internal(authorization: str | None = Header(default=None)) -> None:
     """FastAPI dependency: require a valid `Authorization: Bearer <token>`
     header matching SENTINEL_INTERNAL_TOKEN (used by the gateway only)."""
     _require_bearer_token(authorization, INTERNAL_TOKEN)
+
+
+_basic_security = HTTPBasic()
+
+
+def require_admin_basic(credentials: HTTPBasicCredentials = Depends(_basic_security)) -> None:
+    """FastAPI dependency for the browser-facing dashboard: HTTP Basic
+    auth (any username, ADMIN_TOKEN as the password) so a browser can
+    authenticate with a native login prompt instead of a custom header."""
+    if not secrets.compare_digest(credentials.password, ADMIN_TOKEN):
+        raise HTTPException(
+            status.HTTP_401_UNAUTHORIZED,
+            "invalid credentials",
+            headers={"WWW-Authenticate": "Basic"},
+        )
 
 
 def new_id() -> str:

@@ -374,6 +374,59 @@ test("circuit breaker opens after repeated upstream failures and short-circuits 
   }
 });
 
+test("/metrics exposes Prometheus text reflecting recorded traffic", async () => {
+  const upstream = http.createServer((_req, res) => res.end("ok"));
+  const upstreamPort = await listen(upstream);
+
+  const config: GatewayConfig = {
+    ...emptyConfig(),
+    routes: [
+      {
+        id: "r1", pathPrefix: "/v1/orders", upstreams: [`http://127.0.0.1:${upstreamPort}`],
+        stripPrefix: false, authRequired: false, requiredPermission: null, requireSignature: false,
+      },
+    ],
+  };
+  const gateway = createServer(() => config);
+  const port = await listen(gateway);
+
+  try {
+    await fetch(`http://127.0.0.1:${port}/v1/orders`);
+    const metricsRes = await fetch(`http://127.0.0.1:${port}/metrics`);
+    assert.equal(metricsRes.status, 200);
+    assert.match(metricsRes.headers.get("content-type") ?? "", /text\/plain/);
+    const text = await metricsRes.text();
+    assert.match(text, /sentinel_requests_total\{route="r1",status="200"\} 1/);
+  } finally {
+    gateway.close();
+    upstream.close();
+  }
+});
+
+test("a rejected request is recorded as a rejection metric, not a request metric", async () => {
+  const config: GatewayConfig = {
+    ...emptyConfig(),
+    apiKeys: [apiKey()],
+    routes: [
+      {
+        id: "r1", pathPrefix: "/v1/orders", upstreams: ["http://127.0.0.1:1"],
+        stripPrefix: false, authRequired: true, requiredPermission: null, requireSignature: false,
+      },
+    ],
+  };
+  const gateway = createServer(() => config);
+  const port = await listen(gateway);
+
+  try {
+    await fetch(`http://127.0.0.1:${port}/v1/orders`); // no credentials -> auth rejection
+    const text = await (await fetch(`http://127.0.0.1:${port}/metrics`)).text();
+    assert.match(text, /sentinel_rejections_total\{stage="auth"\} 1/);
+    assert.doesNotMatch(text, /sentinel_requests_total\{route="r1"/);
+  } finally {
+    gateway.close();
+  }
+});
+
 test("/healthz responds without needing any configured route", async () => {
   const gateway = createServer(() => emptyConfig());
   const port = await listen(gateway);

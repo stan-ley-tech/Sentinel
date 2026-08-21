@@ -50,7 +50,7 @@ export function checkReplay(ctx: PipelineContext, guard: ReplayGuard): Rejection
   if (typeof nonce !== "string") return null; // signing.ts already rejects a missing nonce
 
   if (!guard.checkAndRecord(ctx.principal.apiKeyId, nonce)) {
-    return { statusCode: 401, error: "replayed request (nonce already used)" };
+    return { statusCode: 401, error: "replayed request (nonce already used)", stage: "replay" };
   }
   return null;
 }

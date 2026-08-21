@@ -11,7 +11,7 @@ export function validateRequest(ctx: PipelineContext): Rejection | null {
   if (typeof contentLength === "string") {
     const length = Number(contentLength);
     if (Number.isFinite(length) && length > MAX_BODY_BYTES) {
-      return { statusCode: 413, error: `request body exceeds ${MAX_BODY_BYTES} byte limit` };
+      return { statusCode: 413, error: `request body exceeds ${MAX_BODY_BYTES} byte limit`, stage: "validate" };
     }
   }
   return null;

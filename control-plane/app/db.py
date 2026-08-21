@@ -57,7 +57,25 @@ CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS audit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp TEXT NOT NULL,
+    method TEXT NOT NULL,
+    path TEXT NOT NULL,
+    client_ip TEXT NOT NULL,
+    api_key_id TEXT,
+    role TEXT,
+    route_id TEXT,
+    allowed INTEGER NOT NULL,
+    stage TEXT,
+    status_code INTEGER NOT NULL,
+    duration_ms REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_audit_log_id_desc ON audit_log(id DESC);
 """
+
+MAX_AUDIT_LOG_ROWS = 5000
 
 
 def create_connection(path: str) -> sqlite3.Connection:

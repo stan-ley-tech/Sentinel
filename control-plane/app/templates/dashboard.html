@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="refresh" content="5">
+<title>Sentinel Dashboard</title>
+<style>
+  :root {
+    --bg: #0b0f14; --panel: #121821; --border: #232c38; --text: #dbe4ee;
+    --muted: #7b8899; --accent: #4f8cff; --good: #35c07a; --bad: #e5534b; --warn: #e0a72e;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px; background: var(--bg); color: var(--text);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px;
+  }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin-bottom: 20px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
+  .card .label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+  .card .value { font-size: 22px; margin-top: 4px; }
+  section { margin-bottom: 28px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 0 0 8px; }
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  th { color: var(--muted); font-weight: 500; font-size: 11px; text-transform: uppercase; }
+  tr:last-child td { border-bottom: none; }
+  .ok { color: var(--good); } .no { color: var(--bad); } .mid { color: var(--warn); }
+  .muted { color: var(--muted); }
+  .empty { color: var(--muted); padding: 10px; }
+  .scroll { overflow-x: auto; }
+</style>
+</head>
+<body>
+  <h1>Sentinel</h1>
+  <div class="sub">control plane dashboard &middot; refreshes every 5s</div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="label">API Keys</div>
+      <div class="value">{{ keys|length }}</div>
+    </div>
+    <div class="card">
+      <div class="label">Routes</div>
+      <div class="value">{{ routes|length }}</div>
+    </div>
+    <div class="card">
+      <div class="label">IP Rules</div>
+      <div class="value">{{ ip_rules|length }}</div>
+    </div>
+    <div class="card">
+      <div class="label">Requests (total)</div>
+      <div class="value">{{ metrics.requests|sum(attribute="count") if metrics else "&mdash;" }}</div>
+    </div>
+    <div class="card">
+      <div class="label">Rejections (total)</div>
+      <div class="value">{{ metrics.rejections|sum(attribute="count") if metrics else "&mdash;" }}</div>
+    </div>
+  </div>
+
+  <section>
+    <h2>Upstreams</h2>
+    {% if metrics and metrics.upstreams %}
+    <div class="scroll"><table>
+      <tr><th>Upstream</th><th>Health</th><th>Circuit</th></tr>
+      {% for u in metrics.upstreams %}
+      <tr>
+        <td>{{ u.upstream }}</td>
+        <td class="{{ 'ok' if u.healthy else 'no' }}">{{ "healthy" if u.healthy else "unhealthy" }}</td>
+        <td class="{{ 'ok' if u.circuitState == 'closed' else ('mid' if u.circuitState == 'half-open' else 'no') }}">{{ u.circuitState }}</td>
+      </tr>
+      {% endfor %}
+    </table></div>
+    {% else %}
+    <div class="empty">No metrics received from the gateway yet.</div>
+    {% endif %}
+  </section>
+
+  <section>
+    <h2>API Keys</h2>
+    {% if keys %}
+    <div class="scroll"><table>
+      <tr><th>Name</th><th>Role</th><th>Enabled</th><th>Rate limit</th><th>Quota</th><th>Created</th></tr>
+      {% for k in keys %}
+      <tr>
+        <td>{{ k.name }}</td>
+        <td>{{ k.role }}</td>
+        <td class="{{ 'ok' if k.enabled else 'no' }}">{{ "yes" if k.enabled else "no" }}</td>
+        <td>{{ k.rate_limit_per_second ~ "/s burst " ~ k.rate_limit_burst if k.rate_limit_per_second else "default" }}</td>
+        <td>{{ (k.quota_limit ~ " / " ~ k.quota_period) if k.quota_limit else "none" }}</td>
+        <td class="muted">{{ k.created_at }}</td>
+      </tr>
+      {% endfor %}
+    </table></div>
+    {% else %}
+    <div class="empty">No API keys yet.</div>
+    {% endif %}
+  </section>
+
+  <section>
+    <h2>Routes</h2>
+    {% if routes %}
+    <div class="scroll"><table>
+      <tr><th>Path prefix</th><th>Upstreams</th><th>Auth</th><th>Permission</th><th>Signed</th></tr>
+      {% for r in routes %}
+      <tr>
+        <td>{{ r.path_prefix }}</td>
+        <td>{{ r.upstreams }}</td>
+        <td>{{ "required" if r.auth_required else "public" }}</td>
+        <td>{{ r.required_permission or "any" }}</td>
+        <td>{{ "yes" if r.require_signature else "no" }}</td>
+      </tr>
+      {% endfor %}
+    </table></div>
+    {% else %}
+    <div class="empty">No routes configured.</div>
+    {% endif %}
+  </section>
+
+  <section>
+    <h2>IP Rules</h2>
+    {% if ip_rules %}
+    <div class="scroll"><table>
+      <tr><th>CIDR</th><th>Action</th><th>Priority</th></tr>
+      {% for rule in ip_rules %}
+      <tr>
+        <td>{{ rule.cidr }}</td>
+        <td class="{{ 'no' if rule.action == 'deny' else 'ok' }}">{{ rule.action }}</td>
+        <td>{{ rule.priority }}</td>
+      </tr>
+      {% endfor %}
+    </table></div>
+    {% else %}
+    <div class="empty">No IP rules — all traffic allowed by default.</div>
+    {% endif %}
+  </section>
+
+  <section>
+    <h2>Requests by route &amp; status</h2>
+    {% if metrics and metrics.requests %}
+    <div class="scroll"><table>
+      <tr><th>Route</th><th>Status</th><th>Count</th><th>Avg latency</th></tr>
+      {% for req in metrics.requests %}
+      <tr>
+        <td>{{ req.route }}</td>
+        <td class="{{ 'ok' if req.status < 400 else ('mid' if req.status < 500 else 'no') }}">{{ req.status }}</td>
+        <td>{{ req.count }}</td>
+        <td>
+          {% for lat in metrics.avgLatencyMs %}{% if lat.route == req.route %}{{ lat.avgMs }}ms{% endif %}{% endfor %}
+        </td>
+      </tr>
+      {% endfor %}
+    </table></div>
+    {% else %}
+    <div class="empty">No traffic recorded yet.</div>
+    {% endif %}
+  </section>
+
+  <section>
+    <h2>Rejections by stage</h2>
+    {% if metrics and metrics.rejections %}
+    <div class="scroll"><table>
+      <tr><th>Stage</th><th>Count</th></tr>
+      {% for rej in metrics.rejections %}
+      <tr><td>{{ rej.stage }}</td><td>{{ rej.count }}</td></tr>
+      {% endfor %}
+    </table></div>
+    {% else %}
+    <div class="empty">No rejections recorded.</div>
+    {% endif %}
+  </section>
+
+  <section>
+    <h2>Recent audit log (last {{ audit_rows|length }})</h2>
+    {% if audit_rows %}
+    <div class="scroll"><table>
+      <tr><th>Time</th><th>Method</th><th>Path</th><th>Client IP</th><th>Key</th><th>Role</th><th>Allowed</th><th>Stage</th><th>Status</th><th>ms</th></tr>
+      {% for a in audit_rows %}
+      <tr>
+        <td class="muted">{{ a.timestamp }}</td>
+        <td>{{ a.method }}</td>
+        <td>{{ a.path }}</td>
+        <td>{{ a.client_ip }}</td>
+        <td>{{ a.api_key_id or "&mdash;" }}</td>
+        <td>{{ a.role or "&mdash;" }}</td>
+        <td class="{{ 'ok' if a.allowed else 'no' }}">{{ "yes" if a.allowed else "no" }}</td>
+        <td>{{ a.stage or "&mdash;" }}</td>
+        <td>{{ a.status_code }}</td>
+        <td>{{ a.duration_ms }}</td>
+      </tr>
+      {% endfor %}
+    </table></div>
+    {% else %}
+    <div class="empty">No requests recorded yet.</div>
+    {% endif %}
+  </section>
+</body>
+</html>

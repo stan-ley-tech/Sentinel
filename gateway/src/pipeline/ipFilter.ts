@@ -36,7 +36,7 @@ export function checkIpRules(clientIp: string, rules: IpRuleConfig[]): Rejection
 
   for (const rule of sorted) {
     if (rule.action === "deny" && cidrMatches(clientIp, rule.cidr)) {
-      return { statusCode: 403, error: "IP address denied" };
+      return { statusCode: 403, error: "IP address denied", stage: "ip_filter" };
     }
   }
 
@@ -44,5 +44,5 @@ export function checkIpRules(clientIp: string, rules: IpRuleConfig[]): Rejection
   if (allowRules.length === 0) return null;
 
   const allowed = allowRules.some((r) => cidrMatches(clientIp, r.cidr));
-  return allowed ? null : { statusCode: 403, error: "IP address not in allow list" };
+  return allowed ? null : { statusCode: 403, error: "IP address not in allow list", stage: "ip_filter" };
 }

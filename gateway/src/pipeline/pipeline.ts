@@ -12,7 +12,7 @@ import type { IncomingMessage } from "node:http";
 import type { GatewayConfig, RouteConfig } from "../config/types.js";
 import { authenticate } from "./auth.js";
 import { authorize } from "./authorize.js";
-import type { PipelineContext, Rejection } from "./context.js";
+import type { PipelineContext, Principal, Rejection } from "./context.js";
 import { checkIpRules } from "./ipFilter.js";
 import { checkQuota, QuotaTracker } from "./quota.js";
 import { checkRateLimit, RateLimiter } from "./rateLimit.js";
@@ -52,6 +52,11 @@ export interface PipelineOutcome {
    * caller forwards it to the proxy instead of re-piping the (now
    * consumed) request stream. */
   bufferedBody: Buffer | undefined;
+  /** Who the pipeline resolved the caller to be, if anyone — populated
+   * even on a later-stage rejection (e.g. authenticated but rate
+   * limited), for audit logging. */
+  principal: Principal | null;
+  clientIp: string;
 }
 
 export async function runPipeline(
@@ -89,5 +94,5 @@ export async function runPipeline(
     rejection = verifyRequestSignature(ctx) ?? checkReplay(ctx, deps.replayGuard);
   }
 
-  return { rejection, bufferedBody };
+  return { rejection, bufferedBody, principal: ctx.principal, clientIp: ctx.clientIp };
 }

@@ -47,5 +47,9 @@ export function checkQuota(ctx: PipelineContext, tracker: QuotaTracker): Rejecti
   const allowed = tracker.checkAndIncrement(ctx.principal.apiKeyId, key.quotaLimit, key.quotaPeriod);
   return allowed
     ? null
-    : { statusCode: 429, error: `quota exceeded (${key.quotaLimit} requests per ${key.quotaPeriod})` };
+    : {
+        statusCode: 429,
+        error: `quota exceeded (${key.quotaLimit} requests per ${key.quotaPeriod})`,
+        stage: "quota",
+      };
 }

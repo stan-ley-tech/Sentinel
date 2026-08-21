@@ -13,7 +13,10 @@ async function main(): Promise<void> {
   const configClient = new ConfigClient(CONTROL_PLANE_URL, INTERNAL_TOKEN, CONFIG_POLL_MS);
   await configClient.start();
 
-  const server = createServer(() => configClient.config);
+  const server = createServer(() => configClient.config, undefined, {
+    controlPlaneUrl: CONTROL_PLANE_URL,
+    internalToken: INTERNAL_TOKEN,
+  });
   server.listen(PORT, () => {
     console.log(
       `sentinel gateway: listening on :${PORT}, control plane at ${CONTROL_PLANE_URL} (poll every ${CONFIG_POLL_MS}ms)`,
