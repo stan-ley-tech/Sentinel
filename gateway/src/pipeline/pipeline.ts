@@ -1,8 +1,11 @@
-// Orchestrates the ordered stage chain: IP filter -> auth -> authorize ->
-// validate -> [signing -> replay, only for signature-required routes].
-// The request body is only read into memory for routes that need to
-// verify a signature over it; everything else stays a pure stream all the
-// way to the upstream, which matters for proxy throughput.
+// Orchestrates the ordered stage chain. Cheapest and most abuse-relevant
+// checks run first: IP filter needs no state at all; once a caller is
+// authenticated, rate limiting and quota are checked before spending any
+// more work on them, so an over-budget (but validly authenticated) caller
+// is turned away before RBAC lookups or (much more expensive) signature
+// verification ever run. The request body is only read into memory for
+// routes that need to verify a signature over it — everything else stays
+// a pure stream all the way to the upstream.
 
 import type { IncomingMessage } from "node:http";
 
@@ -11,11 +14,23 @@ import { authenticate } from "./auth.js";
 import { authorize } from "./authorize.js";
 import type { PipelineContext, Rejection } from "./context.js";
 import { checkIpRules } from "./ipFilter.js";
+import { checkQuota, QuotaTracker } from "./quota.js";
+import { checkRateLimit, RateLimiter } from "./rateLimit.js";
 import { checkReplay, ReplayGuard } from "./replay.js";
 import { verifyRequestSignature } from "./signing.js";
 import { validateRequest } from "./validate.js";
 
-export { ReplayGuard };
+export { QuotaTracker, RateLimiter, ReplayGuard };
+
+export interface PipelineDeps {
+  replayGuard: ReplayGuard;
+  rateLimiter: RateLimiter;
+  quotaTracker: QuotaTracker;
+}
+
+export function createPipelineDeps(): PipelineDeps {
+  return { replayGuard: new ReplayGuard(), rateLimiter: new RateLimiter(), quotaTracker: new QuotaTracker() };
+}
 
 function readBody(req: IncomingMessage): Promise<Buffer> {
   return new Promise((resolve, reject) => {
@@ -45,7 +60,7 @@ export async function runPipeline(
   search: string,
   route: RouteConfig,
   config: GatewayConfig,
-  replayGuard: ReplayGuard,
+  deps: PipelineDeps,
 ): Promise<PipelineOutcome> {
   const ctx: PipelineContext = {
     req,
@@ -62,6 +77,8 @@ export async function runPipeline(
   let rejection =
     checkIpRules(ctx.clientIp, ctx.config.ipRules) ??
     authenticate(ctx) ??
+    checkRateLimit(ctx, deps.rateLimiter) ??
+    checkQuota(ctx, deps.quotaTracker) ??
     authorize(ctx) ??
     validateRequest(ctx);
 
@@ -69,7 +86,7 @@ export async function runPipeline(
   if (rejection === null && route.requireSignature) {
     ctx.body = await readBody(req);
     bufferedBody = ctx.body;
-    rejection = verifyRequestSignature(ctx) ?? checkReplay(ctx, replayGuard);
+    rejection = verifyRequestSignature(ctx) ?? checkReplay(ctx, deps.replayGuard);
   }
 
   return { rejection, bufferedBody };

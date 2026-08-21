@@ -103,7 +103,11 @@ test("returns 502 when the upstream connection fails", async () => {
       },
     ],
   };
-  const gateway = createServer(() => config); // isHealthy defaults to true
+  // Force-bypass the real health checker/circuit breaker: this test is
+  // about proxy.ts's own connection-error handling, not about whether the
+  // background health checker has raced ahead and marked the dead
+  // upstream unhealthy first (which would 503 instead of 502).
+  const gateway = createServer(() => config, () => true);
   const port = await listen(gateway);
   try {
     const res = await fetch(`http://127.0.0.1:${port}/v1/orders`);
@@ -262,6 +266,108 @@ test("a signature-required route proxies with a valid signature and rejects a ta
       body: '{"amount":999}',
     });
     assert.equal(tampered.status, 401);
+  } finally {
+    gateway.close();
+    upstream.close();
+  }
+});
+
+test("returns 429 once a caller exceeds its configured rate limit", async () => {
+  const upstream = http.createServer((_req, res) => res.end("ok"));
+  const upstreamPort = await listen(upstream);
+
+  const config: GatewayConfig = {
+    ...emptyConfig(),
+    // A slow refill rate keeps this test deterministic: at 1000/s, the
+    // bucket could regenerate a full token in the few milliseconds between
+    // sequential real HTTP round trips, flakily letting the 3rd request
+    // through.
+    apiKeys: [apiKey({ rateLimitPerSecond: 1, rateLimitBurst: 2 })],
+    routes: [
+      {
+        id: "r1", pathPrefix: "/v1/orders", upstreams: [`http://127.0.0.1:${upstreamPort}`],
+        stripPrefix: false, authRequired: true, requiredPermission: null, requireSignature: false,
+      },
+    ],
+  };
+  const gateway = createServer(() => config);
+  const port = await listen(gateway);
+
+  try {
+    const headers = { "x-api-key": "test-key" };
+    const first = await fetch(`http://127.0.0.1:${port}/v1/orders`, { headers });
+    const second = await fetch(`http://127.0.0.1:${port}/v1/orders`, { headers });
+    const third = await fetch(`http://127.0.0.1:${port}/v1/orders`, { headers });
+    assert.equal(first.status, 200);
+    assert.equal(second.status, 200);
+    assert.equal(third.status, 429);
+  } finally {
+    gateway.close();
+    upstream.close();
+  }
+});
+
+test("returns 429 once a caller exhausts its daily quota", async () => {
+  const upstream = http.createServer((_req, res) => res.end("ok"));
+  const upstreamPort = await listen(upstream);
+
+  const config: GatewayConfig = {
+    ...emptyConfig(),
+    apiKeys: [apiKey({ quotaLimit: 1, quotaPeriod: "day" })],
+    routes: [
+      {
+        id: "r1", pathPrefix: "/v1/orders", upstreams: [`http://127.0.0.1:${upstreamPort}`],
+        stripPrefix: false, authRequired: true, requiredPermission: null, requireSignature: false,
+      },
+    ],
+  };
+  const gateway = createServer(() => config);
+  const port = await listen(gateway);
+
+  try {
+    const headers = { "x-api-key": "test-key" };
+    const first = await fetch(`http://127.0.0.1:${port}/v1/orders`, { headers });
+    const second = await fetch(`http://127.0.0.1:${port}/v1/orders`, { headers });
+    assert.equal(first.status, 200);
+    assert.equal(second.status, 429);
+  } finally {
+    gateway.close();
+    upstream.close();
+  }
+});
+
+test("circuit breaker opens after repeated upstream failures and short-circuits further requests", async () => {
+  const upstream = http.createServer((_req, res) => {
+    res.writeHead(500);
+    res.end();
+  });
+  const upstreamPort = await listen(upstream);
+
+  const config: GatewayConfig = {
+    ...emptyConfig(),
+    routes: [
+      {
+        id: "r1", pathPrefix: "/v1/orders", upstreams: [`http://127.0.0.1:${upstreamPort}`],
+        stripPrefix: false, authRequired: false, requiredPermission: null, requireSignature: false,
+      },
+    ],
+  };
+  // No isHealthyOverride: exercises the real circuit breaker (default
+  // failure threshold 5) wired up exactly as production does.
+  const gateway = createServer(() => config);
+  const port = await listen(gateway);
+
+  try {
+    let sawShortCircuit = false;
+    for (let i = 0; i < 8 && !sawShortCircuit; i++) {
+      const res = await fetch(`http://127.0.0.1:${port}/v1/orders`);
+      if (res.status === 503) {
+        sawShortCircuit = true;
+      } else {
+        assert.equal(res.status, 500);
+      }
+    }
+    assert.equal(sawShortCircuit, true, "expected the gateway to eventually short-circuit to 503");
   } finally {
     gateway.close();
     upstream.close();
